@@ -114,7 +114,7 @@ public class DockerProcessExecutor {
         command.add("--cpus=" + dockerConfig.maxCpuUnits());
 
         var volumeSuffix = dockerConfig.securityHardening() && dockerConfig.readOnly() ? ":ro" : "";
-        // Mount SQL file directory (read-only when root fs is read-only).
+        // Mount the parent directory so the container can read the temp file by name.
         command.add("-v");
         command.add(tmpFile.getParent() + ":/code" + volumeSuffix);
         // Pass the SQL file path to the container script via environment variable.

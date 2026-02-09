@@ -25,7 +25,8 @@ public class SqlSandboxAutoConfiguration {
 
     @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean
-    private TempFileManager sqlTempFileManager(SqlDeleteFileManagerProperties fileDeleteManagerProperties) {
+    private TempFileManager sqlTempFileManager(SqlDeleteFileManagerProperties fileDeleteManagerProperties,
+            SqlSandboxProperties sandboxProperties) {
         DeleteConfig deleteConfig = new DeleteConfig(fileDeleteManagerProperties.getMaxRetries(),
                 fileDeleteManagerProperties.getRetryDelay(),
                 fileDeleteManagerProperties.getTerminationTimeout());
