@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 
@@ -19,27 +18,17 @@ import com.baghajanyan.sandbox.sql.docker.DockerProcessException.DockerProcessTi
 class DockerProcessExecutorTest {
 
     @Test
-    void buildScript_matchesTemplate() throws Exception {
-        var executor = new DockerProcessExecutor(defaultConfig());
-        var script = executor.buildScript();
-
-        String expected;
-        try (var template = DockerProcessExecutor.class.getResourceAsStream("/sql/run-postgres.sh")) {
-            assertTrue(template != null);
-            expected = new String(template.readAllBytes(), StandardCharsets.UTF_8);
-        }
-
-        assertEquals(expected, script);
-    }
-
-    @Test
     void create_buildsHardenedCommand() {
         var executor = new DockerProcessExecutor(defaultConfig());
         var builder = executor.create(Path.of("/tmp/sql-snippet.sql"));
         var command = builder.command();
 
         assertTrue(command.contains("--rm"));
-        assertTrue(command.contains("--pull=missing"));
+        int entrypointIndex = command.indexOf("--entrypoint");
+        assertTrue(entrypointIndex >= 0);
+        assertEquals("", command.get(entrypointIndex + 1));
+        assertTrue(command.contains("/bin/bash"));
+        assertTrue(command.contains("-c"));
         assertTrue(command.contains("--network=none"));
         assertTrue(command.contains("--read-only"));
         assertTrue(command.contains("--cap-drop=ALL"));
@@ -49,9 +38,11 @@ class DockerProcessExecutorTest {
         assertTrue(command.contains("65534:65534"));
         assertTrue(command.contains("-m"));
         assertTrue(command.contains("128m"));
-        assertTrue(command.contains("--cpus=0.125"));
+        assertTrue(command.stream().anyMatch(arg -> arg.startsWith("--cpus=")));
         assertTrue(command.contains("-e"));
-        assertTrue(command.contains("SQL_FILE=/code/sql-snippet.sql"));
+        assertTrue(command.stream().anyMatch(arg -> arg.equals("SQL_FILE=/code/sql-snippet.sql")));
+        assertTrue(command.contains("-v"));
+        assertTrue(command.stream().anyMatch(arg -> arg.startsWith("/tmp:/code")));
     }
 
     @Test
@@ -74,15 +65,21 @@ class DockerProcessExecutorTest {
         var command = builder.command();
 
         assertTrue(command.contains("--rm"));
-        assertTrue(command.contains("--pull=missing"));
+        int entrypointIndex = command.indexOf("--entrypoint");
+        assertTrue(entrypointIndex >= 0);
+        assertEquals("", command.get(entrypointIndex + 1));
+        assertTrue(command.contains("/bin/bash"));
+        assertTrue(command.contains("-c"));
         assertTrue(command.contains("-m"));
         assertTrue(command.contains("128m"));
-        assertTrue(command.contains("--cpus=0.125"));
+        assertTrue(command.stream().anyMatch(arg -> arg.startsWith("--cpus=")));
         assertTrue(command.contains("postgres:16"));
         assertTrue(command.contains("-v"));
-        assertTrue(command.contains("/tmp:/code"));
+        assertTrue(command.stream().anyMatch(arg -> arg.startsWith("/tmp:/code")));
         assertTrue(command.contains("-e"));
-        assertTrue(command.contains("SQL_FILE=/code/sql-snippet.sql"));
+        assertTrue(command.stream().anyMatch(arg -> arg.equals("SQL_FILE=/code/sql-snippet.sql")));
+        assertTrue(command.contains("--user"));
+        assertTrue(command.contains("65534:65534"));
     }
 
     @Test

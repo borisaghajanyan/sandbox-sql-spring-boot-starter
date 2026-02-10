@@ -12,6 +12,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if [ ! -f "$SQL_FILE" ]; then
+  echo "SQL file not found: $SQL_FILE" >&2
+  exit 66
+fi
+
 # Init database
 mkdir -p "$PGDATA"
 initdb -U "$POSTGRES_USER" -A trust >/dev/null
@@ -34,8 +39,8 @@ createdb -h /tmp -U "$POSTGRES_USER" "$POSTGRES_DB" >/dev/null
 timing_file=$(mktemp)
 output_file=$(mktemp)
 if psql -h /tmp -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 --csv -P pager=off -P footer=off -q > "$output_file" 2> "$timing_file" <<PSQL; then
-\timing on
-\i "$SQL_FILE"
+\\timing on
+\\i $SQL_FILE
 PSQL
   status=0
 else

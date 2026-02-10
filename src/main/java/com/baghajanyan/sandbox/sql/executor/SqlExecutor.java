@@ -77,8 +77,8 @@ public class SqlExecutor implements CodeExecutor {
             var sqlWithTimeout = wrapWithStatementTimeout(snippet.code(), snippet.timeout());
             dockerInputFile = fileManager.createTempFile("sql-snippet-" + System.nanoTime(), ".sql");
             fileManager.write(dockerInputFile, sqlWithTimeout);
-
             var dockerProcess = process.execute(dockerInputFile);
+
             return parseDockerExecutionResult(dockerProcess, dockerInputFile);
         } catch (IOException e) {
             logger.error("Failed to create/write temp file for SQL snippet", e);
@@ -94,7 +94,6 @@ public class SqlExecutor implements CodeExecutor {
                     Duration.ofMillis(EXECUTION_TIME_ZERO));
         } finally {
             if (dockerInputFile != null) {
-                // Cleanup the temp SQL file asynchronously.
                 fileManager.deleteAsync(dockerInputFile);
             }
         }

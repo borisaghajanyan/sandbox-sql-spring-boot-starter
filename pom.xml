@@ -11,7 +11,7 @@
 	</parent>
 	<groupId>com.github.borisaghajanyan</groupId>
 	<artifactId>sandbox-sql-spring-boot-starter</artifactId>
-	<version>v1.0.3</version>
+	<version>v1.0.4</version>
 	<name>sandbox-sql-spring-boot-starter</name>
 	<description>Spring Boot starter for executing SQL code in a secure Docker sandbox, integrating sandbox-core library with auto-configuration and configurable concurrency.</description>
 	<url>https://github.com/borisaghajanyan/sandbox-sql-spring-boot-starter</url>

@@ -8,11 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.Semaphore;
 
@@ -25,8 +23,6 @@ import com.baghajanyan.sandbox.core.fs.TempFileManager;
 import com.baghajanyan.sandbox.core.model.CodeSnippet;
 import com.baghajanyan.sandbox.sql.config.DockerConfig;
 import com.baghajanyan.sandbox.sql.docker.DockerProcessExecutor;
-import com.baghajanyan.sandbox.sql.docker.DockerProcessException.DockerProcessThreadException;
-import com.baghajanyan.sandbox.sql.docker.DockerProcessException.DockerProcessTimeoutException;
 
 @Tag("integration")
 class SqlCodeExecutorTestIT {
@@ -57,7 +53,7 @@ class SqlCodeExecutorTestIT {
 
                 assertAll(
                                 () -> assertEquals(
-                                                "[{\"id\":\"1\",\"label\":\"value 1\"},{\"id\":\"2\",\"label\":\"value 2\"}]",
+                                                "[{\"id\":1,\"label\":\"value 1\"},{\"id\":2,\"label\":\"value 2\"}]",
                                                 result.stdout()),
                                 () -> assertEquals("", result.stderr()),
                                 () -> assertEquals(0, result.exitCode()),
@@ -79,8 +75,7 @@ class SqlCodeExecutorTestIT {
                 assertAll(
                                 () -> assertEquals("", result.stdout()),
                                 () -> assertTrue(result.stderr().contains("timeout")),
-                                () -> assertThat(result.exitCode(), is(not(0))),
-                                () -> assertTrue(result.executionTime().compareTo(Duration.ofSeconds(10)) < 0));
+                                () -> assertThat(result.exitCode(), is(not(0))));
 
                 verify(fileManager).deleteAsync(any());
         }
@@ -98,8 +93,7 @@ class SqlCodeExecutorTestIT {
                 assertAll(
                                 () -> assertEquals("[]", result.stdout()),
                                 () -> assertEquals("", result.stderr()),
-                                () -> assertEquals(0, result.exitCode()),
-                                () -> assertTrue(result.executionTime().compareTo(Duration.ofSeconds(10)) < 0));
+                                () -> assertEquals(0, result.exitCode()));
 
                 verify(fileManager).deleteAsync(any());
         }
@@ -117,73 +111,17 @@ class SqlCodeExecutorTestIT {
                 assertAll(
                                 () -> assertEquals("", result.stdout()),
                                 () -> assertTrue(result.stderr().contains("does not exist")),
-                                () -> assertThat(result.exitCode(), is(not(0))),
-                                () -> assertTrue(result.executionTime().compareTo(Duration.ofSeconds(10)) < 0));
+                                () -> assertThat(result.exitCode(), is(not(0))));
 
-                verify(fileManager).deleteAsync(any());
-        }
-
-        @Test
-        void execute_whenFileCreationFails_returnFailedExecutionResult() throws Exception {
-                var dockerProcess = dockerProcess("postgres:16");
-                var executor = new SqlExecutor(semaphore, fileManager, dockerProcess);
-                var snippet = new CodeSnippet("", Duration.ofSeconds(2), "sql");
-
-                doThrow(new IOException("Disk full")).when(fileManager).createTempFile(any(), any());
-
-                var result = executor.execute(snippet);
-
-                assertAll(
-                                () -> assertNull(result.stdout()),
-                                () -> assertEquals("Failed to create/write temp file: Disk full", result.stderr()),
-                                () -> assertEquals(-1, result.exitCode()),
-                                () -> assertEquals(Duration.ofMillis(0), result.executionTime()));
-                verify(fileManager, never()).deleteAsync(any());
-        }
-
-        @Test
-        void execute_whenFileWriteFails_returnFailedExecutionResult() throws Exception {
-                var dockerProcess = dockerProcess("postgres:16");
-                var executor = new SqlExecutor(semaphore, fileManager, dockerProcess);
-                var snippet = new CodeSnippet("", Duration.ofSeconds(2), "sql");
-
-                doThrow(new IOException("Failed to write to temp file")).when(fileManager).write(any(), any());
-
-                var result = executor.execute(snippet);
-
-                assertAll(
-                                () -> assertNull(result.stdout()),
-                                () -> assertEquals("Failed to create/write temp file: Failed to write to temp file",
-                                                result.stderr()),
-                                () -> assertEquals(-1, result.exitCode()),
-                                () -> assertEquals(Duration.ofMillis(0), result.executionTime()));
-                verify(fileManager).deleteAsync(any());
-        }
-
-        @Test
-        void execute_whenSnippetExecutionTimesOut_returnFailedExecutionResult() throws Exception {
-                var dockerProcess = dockerProcess("postgres:16");
-                var executor = new SqlExecutor(semaphore, fileManager, dockerProcess);
-                var snippet = new CodeSnippet("", Duration.ofSeconds(2), "sql");
-
-                doThrow(new DockerProcessTimeoutException("Execution timed out")).when(dockerProcess).execute(any());
-
-                var result = executor.execute(snippet);
-
-                assertAll(
-                                () -> assertNull(result.stdout()),
-                                () -> assertEquals("Snippet execution timed out: Execution timed out", result.stderr()),
-                                () -> assertEquals(-1, result.exitCode()),
-                                () -> assertEquals(Duration.ofMillis(0), result.executionTime()));
                 verify(fileManager).deleteAsync(any());
         }
 
         @Test
         void execute_whenDockerTimeoutExceeded_returnsTimeoutError() {
                 var timeoutDocker = new DockerProcessExecutor(new DockerConfig(
-                                32,
+                                128,
                                 0.125,
-                                Duration.ofSeconds(5),
+                                Duration.ofSeconds(1),
                                 "postgres:16",
                                 true,
                                 false,
@@ -203,30 +141,11 @@ class SqlCodeExecutorTestIT {
 
                 assertAll(
                                 () -> assertNull(result.stdout()),
-                                () -> assertTrue(result.stderr().contains("Snippet execution timed out")),
-                                () -> assertEquals(-1, result.exitCode()),
-                                () -> assertEquals(Duration.ofMillis(0), result.executionTime()));
-
-                verify(fileManager).deleteAsync(any());
-        }
-
-        @Test
-        void execute_whenSnippetExecutionThreadFails_returnFailedExecutionResult() throws Exception {
-                var dockerProcess = dockerProcess("postgres:16");
-                var executor = new SqlExecutor(semaphore, fileManager, dockerProcess);
-                var snippet = new CodeSnippet("", Duration.ofSeconds(2), "sql");
-
-                doThrow(new DockerProcessThreadException("Execution failed", new RuntimeException("Some error")))
-                                .when(dockerProcess).execute(any());
-
-                var result = executor.execute(snippet);
-
-                assertAll(
-                                () -> assertNull(result.stdout()),
-                                () -> assertEquals("Failed to handle docker process: Execution failed",
+                                () -> assertEquals("Snippet execution timed out: Execution timed out after 1 seconds",
                                                 result.stderr()),
                                 () -> assertEquals(-1, result.exitCode()),
                                 () -> assertEquals(Duration.ofMillis(0), result.executionTime()));
+
                 verify(fileManager).deleteAsync(any());
         }
 

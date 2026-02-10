@@ -72,8 +72,6 @@ public class DockerProcessExecutor {
         command.add("run");
         // Always remove the container.
         command.add("--rm");
-        // Auto-pull the image if it is missing.
-        command.add("--pull=missing");
 
         if (dockerConfig.securityHardening()) {
             if (!dockerConfig.allowNetwork()) {
@@ -85,7 +83,9 @@ public class DockerProcessExecutor {
                 command.add("--read-only");
                 // Writable tmpfs for temp files.
                 command.add("--tmpfs");
-                command.add(tmpfsSpec("/tmp", dockerConfig.tmpfsSize(), dockerConfig.runAsUser()));
+                // Mount /tmp as an in-memory filesystem (tmpfs) with read/write access,
+                // disable execution and SUID for security, and limit its size.
+                command.add("/tmp:rw,noexec,nosuid,size=" + dockerConfig.tmpfsSize());
             }
             if (dockerConfig.pidsLimit() > 0) {
                 // Limit the number of processes inside the container.
@@ -100,42 +100,46 @@ public class DockerProcessExecutor {
                 command.add("--security-opt");
                 command.add("no-new-privileges");
             }
-            if (!dockerConfig.runAsUser().isBlank()) {
-                // Run as an unprivileged user/group when configured.
-                command.add("--user");
-                command.add(dockerConfig.runAsUser());
-            }
+        }
+        if (!dockerConfig.runAsUser().isBlank()) {
+            // Run container as a non-root user if configured for better security.
+            command.add("--user");
+            command.add(dockerConfig.runAsUser());
         }
 
-        // Memory limit.
+        // Memory & CPU limits.
         command.add("-m");
         command.add(dockerConfig.maxMemoryMb() + "m");
-        // CPU limit.
         command.add("--cpus=" + dockerConfig.maxCpuUnits());
 
         var volumeSuffix = dockerConfig.securityHardening() && dockerConfig.readOnly() ? ":ro" : "";
-        // Mount the parent directory so the container can read the temp file by name.
+        // Mount the SQL file to a fixed path in the container.
         command.add("-v");
         command.add(tmpFile.getParent() + ":/code" + volumeSuffix);
+
         // Pass the SQL file path to the container script via environment variable.
         command.add("-e");
         command.add("SQL_FILE=/code/" + tmpFile.getFileName());
+
+        command.add("-e");
+        command.add("POSTGRES_HOST_AUTH_METHOD=trust");
+
+        command.add("--entrypoint");
+        command.add("");
+
         // Use a writable working directory for Postgres temp files.
         command.add("-w");
         command.add("/tmp");
 
         command.add(dockerConfig.dockerImage());
         // Use a shell to run a small script that initializes and runs Postgres.
-        command.add("sh");
+        command.add("/bin/bash");
         command.add("-c");
-        var script = buildScript();
+        var script = loadScriptTemplate();
         command.add(script);
 
+        logger.info("SQL docker command: {}", command);
         return new ProcessBuilder(command);
-    }
-
-    String buildScript() {
-        return loadScriptTemplate();
     }
 
     private String loadScriptTemplate() {
@@ -148,18 +152,5 @@ public class DockerProcessExecutor {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load script template: " + resourcePath, e);
         }
-    }
-
-    private String tmpfsSpec(String path, String size, String runAsUser) {
-        var spec = new StringBuilder();
-        spec.append(path).append(":rw,noexec,nosuid,size=").append(size).append(",mode=1777");
-        if (runAsUser != null && !runAsUser.isBlank() && runAsUser.matches("\\d+(:\\d+)?")) {
-            var parts = runAsUser.split(":", 2);
-            spec.append(",uid=").append(parts[0]);
-            if (parts.length > 1) {
-                spec.append(",gid=").append(parts[1]);
-            }
-        }
-        return spec.toString();
     }
 }
