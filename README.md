@@ -172,6 +172,7 @@ The `execute` method returns an `ExecutionResult` object, which provides the fol
 
 - Always inspect `stderr` on failures. It contains `psql` error output and may include Docker/runtime errors.
 - A common cause of empty output with a non-zero exit code is a temp directory that is not shared with Docker Desktop. Share your system temp directory or configure Docker to allow it.
+- On first run, Docker may pull the configured image (e.g., `postgres:16`) and the pull progress will appear in `stderr`. This is expected. Pre-pull the image to avoid it.
 - Integration tests are tagged with `@Tag("integration")` and require Docker to be available. Run them only in environments with Docker installed and running.
 
 ## Security Notes
