@@ -166,6 +166,7 @@ The `execute` method returns an `ExecutionResult` object, which provides the fol
 - The SQL file is written via `TempFileManager` (typically under the system temp directory). If Docker Desktop uses a non-default sharing configuration, ensure the temp directory is shared.
 - If Docker cannot read the SQL file from the host, execution may fail with an empty output and a non-zero exit code. This usually means the temp directory is not shared with Docker.
 - Resources are cleaned up after each run: the temp SQL file is deleted asynchronously, the Docker container runs with `--rm` so it is removed on exit, and the container script removes its temp files and the Postgres data directory.
+- When `sandboxcore.sql.security.enable-hardening` is set to `false`, other security flags (`allow-network`, `read-only`, `pids-limit`, `drop-capabilities`, `no-new-privileges`) are ignored. The `run-as-user` setting is still applied.
 
 ## Troubleshooting
 
